@@ -62,6 +62,7 @@ func (w *ChannelWriter) Flush() {
 
 func (w *ChannelWriter) Stop() {
 	w.once.Do(func() {
+		w.t.Stop()
 		close(w.closeChan)
 		<-w.stopChan
 	})
@@ -85,17 +86,14 @@ func (w *ChannelWriter) run() {
 				return
 			case model := <-w.writeChan:
 				w.datas = append(w.datas, model)
+				if len(w.datas) >= WriteBufferSize {
+					w.flush()
+				}
 			case <-w.t.C:
 				w.flush()
 				w.t.Reset(w.d)
 			case <-w.flushImmediateChan:
 				w.flush()
-			default:
-				if len(w.datas) < WriteBufferSize {
-					time.Sleep(SleepDuration)
-				} else {
-					w.flush()
-				}
 			}
 		}
 	}()
