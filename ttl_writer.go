@@ -1,4 +1,4 @@
-package channelwriter
+package ttl_writer
 
 import (
 	"runtime/debug"
@@ -12,20 +12,20 @@ var (
 	FlushInterval   = 2 * time.Second
 )
 
-type ChannelWriter struct {
+type TTLWriter struct {
 	opts               *Options
-	datas              []interface{}
-	writeChan          chan interface{}
+	datas              []any
 	closeChan          chan bool
 	stopChan           chan bool
 	flushImmediateChan chan bool
 	d                  time.Duration
 	t                  *time.Timer
 	once               sync.Once
+	mu                 sync.Mutex
 }
 
-func NewChannelWriter(opts ...Option) *ChannelWriter {
-	w := &ChannelWriter{
+func NewTTLWriter(opts ...Option) *TTLWriter {
+	w := &TTLWriter{
 		opts:               defaultOptions(),
 		closeChan:          make(chan bool, 1),
 		stopChan:           make(chan bool, 1),
@@ -36,15 +36,14 @@ func NewChannelWriter(opts ...Option) *ChannelWriter {
 		o(w.opts)
 	}
 
-	w.datas = make([]interface{}, 0, w.opts.writeBufferSize)
-	w.writeChan = make(chan interface{}, w.opts.chanBufferSize)
+	w.datas = make([]any, 0, w.opts.writeBufferSize)
 	w.t = time.NewTimer(w.opts.flushInterval)
 
 	w.run()
 	return w
 }
 
-func (w *ChannelWriter) ResetFlushInterval(d time.Duration) {
+func (w *TTLWriter) ResetFlushInterval(d time.Duration) {
 	if w.t != nil && !w.t.Stop() {
 		<-w.t.C
 	}
@@ -52,15 +51,22 @@ func (w *ChannelWriter) ResetFlushInterval(d time.Duration) {
 	w.t.Reset(d)
 }
 
-func (w *ChannelWriter) Write(data interface{}) {
-	w.writeChan <- data
+func (w *TTLWriter) Write(data any) {
+	w.mu.Lock()
+	w.datas = append(w.datas, data)
+	len := len(w.datas)
+	w.mu.Unlock()
+
+	if len >= WriteBufferSize {
+		w.flush()
+	}
 }
 
-func (w *ChannelWriter) Flush() {
+func (w *TTLWriter) Flush() {
 	w.flushImmediateChan <- true
 }
 
-func (w *ChannelWriter) Stop() {
+func (w *TTLWriter) Stop() {
 	w.once.Do(func() {
 		w.t.Stop()
 		close(w.closeChan)
@@ -68,7 +74,7 @@ func (w *ChannelWriter) Stop() {
 	})
 }
 
-func (w *ChannelWriter) run() {
+func (w *TTLWriter) run() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -84,11 +90,6 @@ func (w *ChannelWriter) run() {
 			case <-w.closeChan:
 				w.flush()
 				return
-			case model := <-w.writeChan:
-				w.datas = append(w.datas, model)
-				if len(w.datas) >= WriteBufferSize {
-					w.flush()
-				}
 			case <-w.t.C:
 				w.flush()
 				w.t.Reset(w.d)
@@ -99,7 +100,10 @@ func (w *ChannelWriter) run() {
 	}()
 }
 
-func (w *ChannelWriter) flush() {
+func (w *TTLWriter) flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if len(w.datas) <= 0 {
 		return
 	}

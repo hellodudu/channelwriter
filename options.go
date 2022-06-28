@@ -1,4 +1,4 @@
-package channelwriter
+package ttl_writer
 
 import (
 	"io"
@@ -6,12 +6,11 @@ import (
 	"time"
 )
 
-type FlushHandler func([]interface{}) error
+type FlushHandler func([]any) error
 
 type Option func(*Options)
 type Options struct {
 	writeBufferSize int
-	chanBufferSize  int
 	flushInterval   time.Duration
 	sleepDuration   time.Duration
 	logger          *log.Logger
@@ -21,23 +20,16 @@ type Options struct {
 func defaultOptions() *Options {
 	return &Options{
 		writeBufferSize: 1024,
-		chanBufferSize:  64,
 		flushInterval:   2 * time.Second,
 		sleepDuration:   50 * time.Millisecond,
 		logger:          log.Default(),
-		flushHandler:    func([]interface{}) error { return nil },
+		flushHandler:    func([]any) error { return nil },
 	}
 }
 
 func WithWriteBufferSize(sz int) Option {
 	return func(o *Options) {
 		o.writeBufferSize = sz
-	}
-}
-
-func WithChanBufferSize(sz int) Option {
-	return func(o *Options) {
-		o.chanBufferSize = sz
 	}
 }
 
@@ -55,7 +47,7 @@ func WithSleepDuration(d time.Duration) Option {
 
 func WithLogger(w io.Writer) Option {
 	return func(o *Options) {
-		o.logger = log.New(w, "channelwriter: ", log.Lmsgprefix|log.LstdFlags)
+		o.logger = log.New(w, "ttl_writer: ", log.Lmsgprefix|log.LstdFlags)
 		log.SetOutput(w)
 	}
 }

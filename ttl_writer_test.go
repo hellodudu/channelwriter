@@ -1,4 +1,4 @@
-package channelwriter
+package ttl_writer
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestChannelWriter(t *testing.T) {
-	flushFn := func(datas []interface{}) error {
+	flushFn := func(datas []any) error {
 		fmt.Println("begin flush")
 		for _, data := range datas {
 			fmt.Println(data)
@@ -15,7 +15,7 @@ func TestChannelWriter(t *testing.T) {
 		return nil
 	}
 
-	cw := NewChannelWriter(
+	cw := NewTTLWriter(
 		WithFlushInterval(time.Second),
 		WithFlushHandler(flushFn),
 	)
