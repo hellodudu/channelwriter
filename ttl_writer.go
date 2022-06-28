@@ -19,7 +19,7 @@ type TTLWriter struct {
 	stopChan           chan bool
 	flushImmediateChan chan bool
 	d                  time.Duration
-	t                  *time.Timer
+	ticker             *time.Ticker
 	once               sync.Once
 	mu                 sync.Mutex
 }
@@ -37,18 +37,15 @@ func NewTTLWriter(opts ...Option) *TTLWriter {
 	}
 
 	w.datas = make([]any, 0, w.opts.writeBufferSize)
-	w.t = time.NewTimer(w.opts.flushInterval)
+	w.ticker = time.NewTicker(w.opts.flushInterval)
 
 	w.run()
 	return w
 }
 
 func (w *TTLWriter) ResetFlushInterval(d time.Duration) {
-	if w.t != nil && !w.t.Stop() {
-		<-w.t.C
-	}
 	w.opts.flushInterval = d
-	w.t.Reset(d)
+	w.ticker.Reset(d)
 }
 
 func (w *TTLWriter) Write(data any) {
@@ -68,7 +65,7 @@ func (w *TTLWriter) Flush() {
 
 func (w *TTLWriter) Stop() {
 	w.once.Do(func() {
-		w.t.Stop()
+		w.ticker.Stop()
 		close(w.closeChan)
 		<-w.stopChan
 	})
@@ -90,9 +87,8 @@ func (w *TTLWriter) run() {
 			case <-w.closeChan:
 				w.flush()
 				return
-			case <-w.t.C:
+			case <-w.ticker.C:
 				w.flush()
-				w.t.Reset(w.d)
 			case <-w.flushImmediateChan:
 				w.flush()
 			}
