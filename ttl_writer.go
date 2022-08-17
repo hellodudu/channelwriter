@@ -107,7 +107,6 @@ func (w *TTLWriter) flush() {
 	err := w.opts.flushHandler(w.datas)
 	if err != nil {
 		w.opts.logger.Printf("flush failed due to %v", err)
-		return
 	}
 	w.datas = w.datas[:0]
 }
